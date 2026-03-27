@@ -1,0 +1,15 @@
+=== TRANSFORMED OUTPUT ===
+
+temp_xf: [0.]
+snow_1h_xf: [0.]
+clouds_all_xf: [0.]
+temp_category_xf: [0]
+temp_cloud_interaction_xf: [24630.3]
+holiday_xf: [2]
+weather_main_xf: [7]
+weather_description_xf: [5]
+hour_xf: [15.]
+day_xf: [8.]
+day_of_week_xf: [4.]
+month_xf: [1.]
+traffic_volume_xf: [0]
