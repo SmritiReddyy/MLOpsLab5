@@ -1,0 +1,31 @@
+# Python cache
+__pycache__/
+*.pyc
+*.pyo
+*.pyd
+
+# Virtual environment
+venv/
+env/
+.venv/
+
+# Mac files
+.DS_Store
+
+# VS Code
+.vscode/
+
+# Logs
+*.log
+
+# Jupyter checkpoints
+.ipynb_checkpoints/
+
+# Temp files
+*.tmp
+*.swp
+
+# Build files
+build/
+dist/
+*.egg-info/

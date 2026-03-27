@@ -1,89 +1,66 @@
-
 import tensorflow as tf
-import tensorflow_transform as tft
 
 import traffic_constants
 
-# Unpack the contents of the constants module
+# Unpack constants
 _DENSE_FLOAT_FEATURE_KEYS = traffic_constants.DENSE_FLOAT_FEATURE_KEYS
 _RANGE_FEATURE_KEYS = traffic_constants.RANGE_FEATURE_KEYS
 _VOCAB_FEATURE_KEYS = traffic_constants.VOCAB_FEATURE_KEYS
-_VOCAB_SIZE = traffic_constants.VOCAB_SIZE
-_OOV_SIZE = traffic_constants.OOV_SIZE
 _CATEGORICAL_FEATURE_KEYS = traffic_constants.CATEGORICAL_FEATURE_KEYS
-_BUCKET_FEATURE_KEYS = traffic_constants.BUCKET_FEATURE_KEYS
-_FEATURE_BUCKET_COUNT = traffic_constants.FEATURE_BUCKET_COUNT
 _VOLUME_KEY = traffic_constants.VOLUME_KEY
 _transformed_name = traffic_constants.transformed_name
 
 
 def preprocessing_fn(inputs):
-    """tf.transform's callback function for preprocessing inputs.
-    Args:
-    inputs: map from feature keys to raw not-yet-transformed features.
-    Returns:
-    Map from string feature key to transformed feature operations.
+    """
+    Feature engineering pipeline using pure TensorFlow (no TFT)
     """
     outputs = {}
 
-    ### START CODE HERE
-    
-    # Scale these features to the z-score.
-    # for key in _DENSE_FLOAT_FEATURE_KEYS:
-    #     # Scale these features to the z-score.
-    #     outputs[_transformed_name(key)] = tft.scale_to_z_score(inputs[key])
-    
+    # ==============================
+    # 1. Z-score scaling (continuous features)
+    # ==============================
     for key in _DENSE_FLOAT_FEATURE_KEYS:
-        if key == 'temp':
-            outputs[_transformed_name(key)] = tft.scale_to_0_1(inputs[key])
-        else:
-            outputs[_transformed_name(key)] = tft.scale_to_z_score(inputs[key])
-                
+        mean = tf.reduce_mean(inputs[key])
+        std = tf.math.reduce_std(inputs[key])
+        outputs[_transformed_name(key)] = (inputs[key] - mean) / (std + 1e-6)
 
-    # Scale these feature/s from 0 to 1
+    # ==============================
+    # 2. Min-max scaling (range features)
+    # ==============================
     for key in _RANGE_FEATURE_KEYS:
-        outputs[_transformed_name(key)] = tft.scale_to_0_1(inputs[key])
+        min_val = tf.reduce_min(inputs[key])
+        max_val = tf.reduce_max(inputs[key])
+        outputs[_transformed_name(key)] = (inputs[key] - min_val) / (max_val - min_val + 1e-6)
 
-    # New feature: temperature category (above/below mean)
-    outputs['temp_category_xf'] = tf.cast(
-        tf.greater(
-            tf.cast(inputs['temp'], tf.float32),
-            tft.mean(tf.cast(inputs['temp'], tf.float32))
-        ),
-        tf.int64
-)
-            
+    # ==============================
+    # 3. NEW FEATURE: Temperature category
+    # ==============================
+    temp_mean = tf.reduce_mean(inputs['temp'])
+    outputs['temp_category_xf'] = tf.cast(inputs['temp'] > temp_mean, tf.int64)
 
-    # Transform the strings into indices 
-    # hint: use the VOCAB_SIZE and OOV_SIZE to define the top_k and num_oov parameters
+    # ==============================
+    # 4. NEW FEATURE: Interaction
+    # ==============================
+    outputs['temp_cloud_interaction_xf'] = tf.cast(inputs['temp'], tf.float32) * tf.cast(inputs['clouds_all'], tf.float32)
+
+    # ==============================
+    # 5. Simple categorical encoding (hashing)
+    # ==============================
     for key in _VOCAB_FEATURE_KEYS:
-        outputs[_transformed_name(key)] = tft.compute_and_apply_vocabulary(inputs[key],
-                                                                           num_oov_buckets = _OOV_SIZE,
-                                                                          top_k = _VOCAB_SIZE)
-            
-            
-    # Bucketize the feature
-    for key in _BUCKET_FEATURE_KEYS:
-        outputs[_transformed_name(key)] = tft.bucketize(inputs[key], _FEATURE_BUCKET_COUNT[key])
-            
+        outputs[_transformed_name(key)] = tf.strings.to_hash_bucket_fast(inputs[key], 10)
 
-    # Keep the features as is. No tft function needed.
+    # ==============================
+    # 6. Keep categorical features as-is
+    # ==============================
     for key in _CATEGORICAL_FEATURE_KEYS:
         outputs[_transformed_name(key)] = inputs[key]
 
-        
-    # Use `tf.cast` to cast the label key to float32
-    traffic_volume = tf.cast(inputs[_VOLUME_KEY], tf.float32)
-  
-    
-    # Create a feature that shows if the traffic volume is greater than the mean and cast to an int
-    outputs[_transformed_name(_VOLUME_KEY)] = tf.cast(          
-        # Use `tf.greater` to check if the traffic volume in a row is greater than the mean of the entire traffic volumn column
-        # Hint: Use a `tft` function to compute the mean.
-        tf.greater(traffic_volume, tft.mean(tf.cast(inputs[_VOLUME_KEY], tf.float32))),
-        
-        tf.int64)        
-    # New feature interaction
-    outputs['temp_cloud_interaction_xf'] = tf.cast(inputs['temp'], tf.float32) * tf.cast(inputs['clouds_all'], tf.float32)                                
-    ### END CODE HERE
+    # ==============================
+    # 7. Label transformation
+    # ==============================
+    volume = tf.cast(inputs[_VOLUME_KEY], tf.float32)
+    mean_volume = tf.reduce_mean(volume)
+    outputs[_transformed_name(_VOLUME_KEY)] = tf.cast(volume > mean_volume, tf.int64)
+
     return outputs
