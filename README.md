@@ -39,3 +39,5 @@ pip install tensorflow
 ```bash
 python run_pipeline.py
 ```
+
+Output of the file is in output.txt 
